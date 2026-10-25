@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Envelope Budget — Asdale Dynamics, LLC</title>
+<style>
+:root{
+  --bg:#f6f4ef; --card:#ffffff; --ink:#23282e; --muted:#6b7280;
+  --accent:#2f7d6b; --accent-soft:#e3f0ec; --warn:#b45309; --danger:#b91c1c;
+  --bar-bg:#e8e6e0; --radius:12px;
+  font-size:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#191d21; --card:#21272d; --ink:#e8e6e0; --muted:#9aa3ac;
+    --accent:#5fbfa6; --accent-soft:#233a33; --bar-bg:#33393f;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  line-height:1.45; padding-bottom:4rem;
+}
+header{
+  padding:.9rem 1rem; display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;
+  justify-content:space-between; border-bottom:1px solid var(--bar-bg);
+}
+h1{font-size:1.05rem; margin:0; font-weight:700}
+h1 small{display:block; color:var(--muted); font-weight:400; font-size:.75rem}
+.monthbar{display:flex; gap:.4rem; align-items:center}
+.monthbar button{padding:.45rem .7rem}
+button{
+  font:inherit; cursor:pointer; border:1px solid var(--bar-bg); background:var(--card);
+  color:var(--ink); border-radius:8px; padding:.5rem .8rem;
+}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+button.danger{color:var(--danger); border-color:var(--danger)}
+button:disabled{opacity:.45; cursor:not-allowed}
+#currentMonth{font-weight:700; min-width:9.5rem; text-align:center}
+main{max-width:56rem; margin:0 auto; padding:1rem}
+.summary{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+  gap:.6rem; margin-bottom:1rem;
+}
+.summary .card{padding:.7rem .9rem}
+.summary b{display:block; font-size:1.15rem}
+.summary span{color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.03em}
+.card{
+  background:var(--card); border:1px solid var(--bar-bg); border-radius:var(--radius);
+}
+#envelopes{display:grid; grid-template-columns:repeat(auto-fill,minmax(16.5rem,1fr)); gap:.8rem}
+.env{padding:.85rem; display:flex; flex-direction:column; gap:.5rem}
+.env .name{font-weight:700; font-size:1rem; display:flex; justify-content:space-between; gap:.4rem; align-items:baseline}
+.kind{font-size:.68rem; color:var(--accent); background:var(--accent-soft); padding:.1rem .45rem; border-radius:99px; white-space:nowrap}
+.bar{height:.6rem; background:var(--bar-bg); border-radius:99px; overflow:hidden}
+.bar>div{height:100%; background:var(--accent); border-radius:99px}
+.bar.low>div{background:var(--warn)}
+.bar.empty>div{background:var(--danger)}
+.amt{display:flex; justify-content:space-between; font-size:.85rem}
+.amt .left{color:var(--muted)}
+.env .actions{display:flex; gap:.4rem; flex-wrap:wrap}
+.quick{display:flex; gap:.35rem; flex-wrap:wrap; align-items:center}
+.quick button{padding:.35rem .55rem; font-size:.85rem}
+.envdetails button{color:var(--muted); border:none; background:none; text-decoration:underline; padding:.2rem 0}
+.txlist{list-style:none; margin:.2rem 0 0; padding:.3rem 0 0; border-top:1px dashed var(--bar-bg); font-size:.85rem}
+.txlist li{display:flex; justify-content:space-between; gap:.5rem; padding:.2rem 0}
+.txlist .note{color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.txlist button{border:none; background:none; color:var(--danger); padding:0 .2rem; cursor:pointer}
+dialog{border:1px solid var(--bar-bg); border-radius:var(--radius); padding:1rem; max-width:22rem; width:92%; background:var(--card); color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h2{margin:0 0 .6rem; font-size:1rem}
+dialog label{display:block; font-size:.85rem; margin:.7rem 0 .25rem}
+dialog input,dialog select{
+  font:inherit; width:100%; padding:.45rem .55rem; border:1px solid var(--bar-bg);
+  border-radius:8px; background:var(--bg); color:var(--ink);
+}
+dialog .btnrow{display:flex; gap:.5rem; justify-content:flex-end; margin-top:1rem}
+.hint{color:var(--muted); font-size:.8rem}
+.row{display:flex; gap:.5rem; align-items:center}
+#editBudgets{width:100%; tab-size:4; font-family:ui-monospace,monospace; font-size:.8rem; white-space:pre; padding:.5rem}
+footer{max-width:56rem; margin:1.5rem auto 0; padding:0 1rem; color:var(--muted); font-size:.8rem; text-align:center}
+.spacer{flex:1}
+@media (max-width:480px){ #currentMonth{min-width:7.5rem} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Envelope Budget <small>offline &amp; local-only</small></h1>
+  <div class="monthbar">
+    <button id="prevMonth" aria-label="Previous month">&larr;</button>
+    <span id="currentMonth">—</span>
+    <button id="nextMonth" aria-label="Next month">&rarr;</button>
+  </div>
+  <div class="row">
+    <button id="setupMonth" class="primary">Set up month</button>
+    <details style="position:relative">
+      <summary><button>Data</button></summary>
+      <div style="position:absolute; right:0; z-index:5; display:flex; flex-direction:column; gap:.3rem; background:var(--card); border:1px solid var(--bar-bg); border-radius:8px; padding:.4rem">
+        <button id="exportCsv">Export CSV</button>
+        <button id="exportJson">Backup JSON</button>
+        <button id="importJson">Restore JSON</button>
+        <button id="eraseAll" class="danger">Erase all data</button>
+      </div>
+    </details>
+  </div>
+</header>
+<main>
+  <div class="summary" id="summary"></div>
+  <div id="envelopes"></div>
+  <p class="hint" style="margin-top:1rem">
+    Tap <strong>Spend</strong> then a quick amount — that's it. Amounts are entered as positive money you spent; refunds as negative.
+  </p>
+</main>
+<footer>
+  Envelope Budget — an offline tool by Asdale Dynamics, LLC. All data stays in your browser (localStorage). MIT License.
+</footer>
+
+<dialog id="dlgEnv">
+  <h2 id="dlgEnvTitle">New envelope</h2>
+  <label for="envName">Name</label>
+  <input id="envName" type="text" maxlength="40" placeholder="Groceries">
+  <label for="envKind">Type</label>
+  <select id="envKind">
+    <option value="monthly">Monthly — refill each month, carryover is your choice</option>
+    <option value="sinking">Sinking fund — save up over time for a yearly bill</option>
+  </select>
+  <label for="envTarget">Target (sinking funds only, optional)</label>
+  <input id="envTarget" type="number" min="0" step="0.01" placeholder="600">
+  <label for="envDefaultBudget">Default budget each month (optional)</label>
+  <input id="envDefaultBudget" type="number" min="0" step="0.01" placeholder="100">
+  <div class="btnrow">
+    <button data-close>Cancel</button>
+    <button id="envSave" class="primary">Save</button>
+  </div>
+</dialog>
+
+<dialog id="dlgSpend">
+  <h2 id="dlgSpendTitle">Log spending</h2>
+  <p class="hint" id="dlgSpendLeft"></p>
+  <div class="quick" id="quickBtns"></div>
+  <label for="spendAmt">Amount (negative for refund)</label>
+  <input id="spendAmt" type="number" step="0.01" placeholder="12.50">
+  <label for="spendNote">Note (optional)</label>
+  <input id="spendNote" type="text" maxlength="60" placeholder="farmers market">
+  <div class="btnrow">
+    <button data-close>Cancel</button>
+    <button id="spendSave" class="primary">Log it</button>
+  </div>
+</dialog>
+
+<dialog id="dlgEdit">
+  <h2 id="dlgEditTitle">Edit spending</h2>
+  <label for="editAmt">Amount</label>
+  <input id="editAmt" type="number" step="0.01">
+  <label for="editNote">Note</label>
+  <input id="editNote" type="text" maxlength="60">
+  <div class="btnrow">
+    <button id="editDelete" class="danger">Delete</button>
+    <span class="spacer"></span>
+    <button data-close>Cancel</button>
+    <button id="editSave" class="primary">Save</button>
+  </div>
+</dialog>
+
+<dialog id="dlgRollover">
+  <h2 id="dlgRolloverTitle">Fill a new month</h2>
+  <p class="hint">Choose how much of each envelope's leftover carries into the new month. Sinking funds carry over by default.</p>
+  <div id="rolloverRows"></div>
+  <label for="newIncome">Income this month (optional)</label>
+  <input id="newIncome" type="number" min="0" step="0.01">
+  <div class="btnrow">
+    <button data-close>Cancel</button>
+    <button id="rolloverSave" class="primary">Create month</button>
+  </div>
+</dialog>
+
+<input type="file" id="fileInput" accept="application/json" hidden>
+
+<script>
+"use strict";
+/* ============================================================
+   Pure/core logic (no DOM). Tests extract this block:
+   search for CORE-BEGIN / CORE-END in tests/rollover.test.js
+   ============================================================ */
+/* CORE-BEGIN */
+function round2(n){
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+function envelopeSpent(month, envId){
+  if(!month || !month.txs) return 0;
+  let s = 0;
+  for(const t of month.txs) if(t.envId === envId) s += t.amount;
+  return round2(s);
+}
+function envelopeAvailable(month, envId){
+  const b = (month && month.budgeted && month.budgeted[envId]) || 0;
+  const c = (month && month.carriedIn && month.carriedIn[envId]) || 0;
+  return round2(b + c);
+}
+function envelopeRemaining(month, envId){
+  return round2(envelopeAvailable(month, envId) - envelopeSpent(month, envId));
+}
+function monthTotals(state, monthKey){
+  const m = state.months[monthKey];
+  if(!m) return { budgeted: 0, spent: 0, carriedIn: 0, income: 0, left: 0 };
+  let budgeted = 0, carriedIn = 0;
+  for(const env of state.envelopes){
+    budgeted = round2(budgeted + ((m.budgeted && m.budgeted[env.id]) || 0));
+    carriedIn = round2(carriedIn + ((m.carriedIn && m.carriedIn[env.id]) || 0));
+  }
+  let s = 0;
+  for(const t of (m.txs || [])) s += t.amount; // positive = spent, negative = refund
+  const income = m.income || 0;
+  return { budgeted, spent: round2(s), carriedIn, income, left: round2(income - budgeted) };
+}
+/**
+ * Rollover math (pure — does not mutate the input state).
+ * state.months[fromKey] must exist; months[toKey] must not exist yet.
+ * plan: map envId -> "full" | "reset" | number (explicit carry amount, clamped >= 0).
+ * Missing plan entry = "default": sinking funds always carry their full
+ * remaining balance; monthly envelopes carry full remaining unless
+ * env.carryDefault === "reset".
+ * The new month's budget starts as a copy of the source month's budget
+ * (or the envelope's defaultBudget if the source month had none for it).
+ * Returns { state, report } where report is per-envelope carryover detail.
+ */
+function rolloverMonth(state, fromKey, toKey, plan){
+  plan = plan || {};
+  if(!state.months[fromKey]) throw new Error("Source month does not exist: " + fromKey);
+  if(state.months[toKey]) throw new Error("Target month already exists: " + toKey);
+  const from = state.months[fromKey];
+  const carriedIn = {};
+  const budgeted = {};
+  const report = [];
+  for(const env of state.envelopes){
+    const left = envelopeRemaining(from, env.id);
+    const choice = plan[env.id];
+    let carry;
+    if(choice === "reset"){
+      carry = 0;
+    } else if(typeof choice === "number" && isFinite(choice)){
+      carry = Math.max(0, round2(choice));
+    } else if(choice === "full" || choice === undefined){
+      carry = env.kind === "sinking" ? left : (env.carryDefault === "reset" ? 0 : left);
+    } else {
+      throw new Error("Unknown carryover plan for " + env.id + ": " + choice);
+    }
+    carry = round2(carry);
+    carriedIn[env.id] = carry;
+    const prevBudget = from.budgeted[env.id];
+    budgeted[env.id] = round2(prevBudget !== undefined ? prevBudget : (env.defaultBudget || 0));
+    report.push({
+      envId: env.id, name: env.name, kind: env.kind,
+      leftover: round2(left), carryover: carry, newBudget: budgeted[env.id]
+    });
+  }
+  const newState = {
+    envelopes: state.envelopes.map(e => e),
+    months: Object.assign({}, state.months, {
+      [toKey]: { budgeted, carriedIn, txs: [], income: 0 }
+    })
+  };
+  return { state: newState, report };
+}
+/* CORE-END */
+
+/* ---------- generic helpers ---------- */
+function currentMonthKey(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+function monthLabel(key){
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
+}
+function shiftMonth(key, delta){
+  const [y, m] = key.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+let uidCounter = 0;
+function uid(){
+  return Date.now().toString(36) + (uidCounter++).toString(36) + Math.random().toString(36).slice(2, 6);
+}
+function fmt(n){
+  const sign = n < 0 ? "-" : "";
+  const a = Math.abs(n);
+  return sign + "$" + a.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+/* ---------- state ---------- */
+const STORAGE_KEY = "envelope-budget-v1";
+function defaultState(){
+  const seed = [
+    { id: uid(), name: "Groceries", kind: "monthly", defaultBudget: 400, carryDefault: "full" },
+    { id: uid(), name: "Gas / Transport", kind: "monthly", defaultBudget: 120, carryDefault: "reset" },
+    { id: uid(), name: "Fun money", kind: "monthly", defaultBudget: 60, carryDefault: "full" },
+    { id: uid(), name: "Car insurance (yearly)", kind: "sinking", target: 600, defaultBudget: 50, carryDefault: "full" }
+  ];
+  const mk = currentMonthKey();
+  const budgeted = {};
+  const months = {};
+  months[mk] = { budgeted: {}, carriedIn: {}, txs: [], income: 0 };
+  for(const e of seed) months[mk].budgeted[e.id] = e.defaultBudget || 0;
+  return { envelopes: seed, months };
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    const st = JSON.parse(raw);
+    if(!st || !Array.isArray(st.envelopes) || typeof st.months !== "object") return null;
+    return st;
+  }catch(e){ return null; }
+}
+let state = loadState() || defaultState();
+let curMonth = currentMonthKey();
+if(!state.months[curMonth]) curMonth = latestMonthKey(state) || currentMonthKey();
+function latestMonthKey(st){
+  const keys = Object.keys(st.months).sort();
+  return keys.length ? keys[keys.length - 1] : null;
+}
+function saveState(){
+  state.updatedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function ensureMonth(key){
+  if(!state.months[key]){
+    state.months[key] = { budgeted: {}, carriedIn: {}, txs: [], income: 0 };
+  }
+  return state.months[key];
+}
+
+/* ---------- rendering ---------- */
+const $ = id => document.getElementById(id);
+
+function render(){
+  $("currentMonth").textContent = monthLabel(curMonth);
+  const t = monthTotals(state, curMonth);
+  $("summary").innerHTML =
+    '<div class="card"><b>' + fmt(t.income) + '</b><span>Income</span></div>' +
+    '<div class="card"><b>' + fmt(t.budgeted) + '</b><span>Budgeted</span></div>' +
+    '<div class="card"><b>' + fmt(t.spent) + '</b><span>Spent</span></div>' +
+    '<div class="card"><b>' + fmt(t.left) + '</b><span>' +
+      (t.left < 0 ? 'Over budget' : 'Left to budget') + '</span></div>';
+  const month = state.months[curMonth];
+  const host = $("envelopes");
+  host.innerHTML = "";
+  if(!state.envelopes.length){
+    host.innerHTML = '<p class="hint">No envelopes yet — add one to get started.</p>';
+  }
+  for(const env of state.envelopes){
+    const avail = envelopeAvailable(month, env.id);
+    const spent = envelopeSpent(month, env.id);
+    let rem = envelopeRemaining(month, env.id);
+    const pct = avail > 0 ? Math.max(0, Math.min(100, rem / avail * 100)) : 0;
+    const cls = rem <= 0 ? "empty" : (pct <= 20 ? "low" : "");
+    let extra = "";
+    if(env.kind === "sinking" && env.target){
+      extra = ' · <span class="hint">' + fmt(rem) + " of " + fmt(env.target) + " goal</span>";
+    }
+    const li = document.createElement("div");
+    li.className = "card env";
+    li.innerHTML =
+      '<div class="name"><span>' + escapeHtml(env.name) + '</span>' +
+      '<span class="kind">' + (env.kind === "sinking" ? "sinking" : "monthly") + '</span></div>' +
+      '<div class="amt"><span class="left">' + fmt(spent) + ' spent of ' + fmt(avail) + extra + '</span>' +
+      '<span>' + fmt(rem) + ' left</span></div>' +
+      '<div class="bar ' + cls + '" role="img" aria-label="Remaining ' + Math.round(pct) + ' percent"><div style="width:' + pct + '%"></div></div>' +
+      '<div class="actions">' +
+      '<button class="primary" data-spend="' + env.id + '">Spend</button>' +
+      '</div>' +
+      '<div class="envdetails">' +
+      '<button data-editenv="' + env.id + '">edit envelope</button>' +
+      '<button data-txs="' + env.id + '">show/hide spending</button>' +
+      '</div>' +
+      '<ul class="txlist" hidden data-list="' + env.id + '"></ul>';
+    host.appendChild(li);
+  }
+  document.querySelectorAll("[data-txs]").forEach(b => {
+    b.addEventListener("click", () => toggleTxList(b.getAttribute("data-txs")));
+  });
+  document.querySelectorAll("[data-spend]").forEach(b => {
+    b.addEventListener("click", () => openSpend(b.getAttribute("data-spend")));
+  });
+  document.querySelectorAll("[data-editenv]").forEach(b => {
+    b.addEventListener("click", () => openEnvDialog(b.getAttribute("data-editenv")));
+  });
+}
+
+function toggleTxList(envId){
+  const list = document.querySelector('[data-list="' + envId + '"]');
+  if(!list) return;
+  if(!list.hidden){ list.hidden = true; return; }
+  const month = state.months[curMonth];
+  const txs = (month.txs || []).filter(t => t.envId === envId).slice().reverse();
+  list.innerHTML = txs.length ? "" : '<li class="hint" style="display:block">No spending logged yet.</li>';
+  for(const t of txs){
+    const li = document.createElement("li");
+    li.innerHTML =
+      '<span>' + escapeHtml(t.date) + (t.note ? ' — <span class="note">' + escapeHtml(t.note) + '</span>' : '') + '</span>' +
+      '<span><b>' + fmt(t.amount) + '</b> <button data-edittx="' + t.id + '" aria-label="Edit transaction">✎</button></span>';
+    list.appendChild(li);
+  }
+  list.querySelectorAll("[data-edittx]").forEach(b => {
+    b.addEventListener("click", () => openEditTx(b.getAttribute("data-edittx")));
+  });
+  list.hidden = false;
+}
+
+/* ---------- spending (two taps) ---------- */
+let spendEnvId = null;
+const QUICK = [5, 10, 20, 50];
+function openSpend(envId){
+  spendEnvId = envId;
+  const env = state.envelopes.find(e => e.id === envId);
+  const month = state.months[curMonth];
+  $("dlgSpendTitle").textContent = "Log spending — " + env.name;
+  $("dlgSpendLeft").textContent = "Left in envelope: " + fmt(envelopeRemaining(month, envId));
+  const qb = $("quickBtns");
+  qb.innerHTML = "";
+  for(const q of QUICK){
+    const btn = document.createElement("button");
+    btn.textContent = "$" + q;
+    btn.addEventListener("click", () => logSpend(q));
+    qb.appendChild(btn);
+  }
+  $("spendAmt").value = "";
+  $("spendNote").value = "";
+  $("dlgSpend").showModal();
+  $("quickBtns").firstChild && $("quickBtns").firstChild.focus();
+}
+function logSpend(amount, source){
+  if(spendEnvId == null) return;
+  let amt;
+  if(typeof amount === "number") amt = amount;
+  else amt = parseFloat($("spendAmt").value);
+  if(!isFinite(amt) || amt === 0){
+    // fall back to first quick button? no — show the input
+    $("spendAmt").focus();
+    return;
+  }
+  const month = ensureMonth(curMonth);
+  month.txs.push({
+    id: uid(),
+    envId: spendEnvId,
+    date: new Date().toISOString().slice(0, 10),
+    amount: round2(amt),
+    note: $("spendNote").value.trim()
+  });
+  saveState();
+  $("dlgSpend").close();
+  render();
+}
+
+/* ---------- edit/delete transaction ---------- */
+let editTxId = null;
+function openEditTx(txId){
+  const month = state.months[curMonth];
+  const tx = (month.txs || []).find(t => t.id === txId);
+  if(!tx) return;
+  editTxId = txId;
+  $("editAmt").value = tx.amount;
+  $("editNote").value = tx.note || "";
+  $("dlgEdit").showModal();
+}
+function saveEditTx(){
+  const month = state.months[curMonth];
+  const tx = month.txs.find(t => t.id === editTxId);
+  if(tx){
+    const amt = parseFloat($("editAmt").value);
+    if(isFinite(amt)) tx.amount = round2(amt);
+    tx.note = $("editNote").value.trim();
+    saveState();
+  }
+  closeAndRerender("dlgEdit");
+}
+function deleteTx(){
+  if(editTxId == null) return;
+  if(!confirm("Delete this transaction?")) return;
+  const month = state.months[curMonth];
+  const i = month.txs.findIndex(t => t.id === editTxId);
+  if(i >= 0){ month.txs.splice(i, 1); saveState(); }
+  closeAndRerender("dlgEdit");
+}
+
+/* ---------- envelope add/edit ---------- */
+let editEnvId = null;
+function openEnvDialog(envId){
+  editEnvId = envId || null;
+  $("dlgEnvTitle").textContent = envId ? "Edit envelope" : "New envelope";
+  const env = envId ? state.envelopes.find(e => e.id === envId) : null;
+  $("envName").value = env ? env.name : "";
+  $("envKind").value = env ? env.kind : "monthly";
+  $("envTarget").value = env && env.target ? env.target : "";
+  $("envDefaultBudget").value = env && env.defaultBudget ? env.defaultBudget : "";
+  $("dlgEnv").showModal();
+}
+function saveEnv(){
+  const name = $("envName").value.trim();
+  if(!name){ $("envName").focus(); return; }
+  const kind = $("envKind").value;
+  const target = parseFloat($("envTarget").value);
+  const db = parseFloat($("envDefaultBudget").value);
+  if(editEnvId){
+    const env = state.envelopes.find(e => e.id === editEnvId);
+    env.name = name; env.kind = kind;
+    env.target = isFinite(target) && target > 0 ? round2(target) : undefined;
+    env.defaultBudget = isFinite(db) && db > 0 ? round2(db) : (kind === "sinking" ? 0 : env.defaultBudget);
+  } else {
+    const env = {
+      id: uid(), name, kind,
+      target: kind === "sinking" && isFinite(target) && target > 0 ? round2(target) : undefined,
+      defaultBudget: isFinite(db) && db > 0 ? round2(db) : 0,
+      carryDefault: "full"
+    };
+    state.envelopes.push(env);
+    ensureMonth(curMonth).budgeted[env.id] = env.defaultBudget;
+  }
+  saveState();
+  closeAndRerender("dlgEnv");
+}
+
+/* ---------- month setup / rollover ---------- */
+function openRollover(){
+  const prevKey = latestMonthKey(state);
+  const nextKey = shiftMonth(curMonth, 1);
+  $("dlgRolloverTitle").textContent = "Fill " + monthLabel(nextKey) + " (from " + monthLabel(prevKey) + ")";
+  $("newIncome").value = "";
+  const rows = $("rolloverRows");
+  rows.innerHTML = "";
+  const prevMonth = state.months[prevKey];
+  if(!prevMonth){
+    // brand new: start month without carryover
+    for(const env of state.envelopes){
+      rows.appendChild(rolloverRow(env, env.defaultBudget || 0, 0, "default"));
+    }
+  } else {
+    for(const env of state.envelopes){
+      const left = envelopeRemaining(prevMonth, env.id);
+      const defBudget = (prevMonth.budgeted && prevMonth.budgeted[env.id]) || env.defaultBudget || 0;
+      rows.appendChild(rolloverRow(env, defBudget, left, "default"));
+    }
+  }
+  $("dlgRollover").dataset.prevKey = prevKey || "";
+  $("dlgRollover").dataset.nextKey = nextKey;
+  $("dlgRollover").showModal();
+}
+function rolloverRow(env, defBudget, leftover, choice){
+  const div = document.createElement("div");
+  div.style.cssText = "padding:.45rem 0;border-bottom:1px dashed var(--bar-bg)";
+  div.innerHTML =
+    '<div class="row"><b style="flex:1">' + escapeHtml(env.name) + '</b>' +
+    '<span class="hint">leftover ' + fmt(leftover) + '</span></div>' +
+    '<div class="row" style="gap:.4rem">' +
+    '<label class="hint" for="ro_' + env.id + '">new budget</label>' +
+    '<input id="ro_' + env.id + '" type="number" min="0" step="0.01" value="' + defBudget + '" style="width:6rem">' +
+    '<select id="roSel_' + env.id + '" style="width:auto">' +
+    '<option value="default"' + (choice === "default" ? " selected" : "") + '>carry leftover</option>' +
+    '<option value="reset">drop leftover</option>' +
+    '</select>' +
+    '</div>';
+  return div;
+}
+function applyRollover(){
+  const nextKey = $("dlgRollover").dataset.nextKey;
+  const prevKey = $("dlgRollover").dataset.prevKey;
+  if(!nextKey || state.months[nextKey]){ closeAndRerender(null); return; }
+  const plan = {};
+  const base = { envelopes: state.envelopes.map(e => e), months: state.months };
+  if(prevKey && state.months[prevKey]){
+    for(const env of state.envelopes){
+      const sel = document.getElementById("roSel_" + env.id);
+      plan[env.id] = sel && sel.value === "reset" ? "reset" : "full";
+    }
+    const r = rolloverMonth(base, prevKey, nextKey, plan);
+    state.months = r.state.months;
+    state.envelopes = r.state.envelopes;
+    for(const env of state.envelopes){
+      const inp = document.getElementById("ro_" + env.id);
+      const v = parseFloat(inp.value);
+      state.months[nextKey].budgeted[env.id] = isFinite(v) && v > 0 ? round2(v) : 0;
+    }
+  } else {
+    ensureMonth(nextKey);
+    for(const env of state.envelopes){
+      const inp = document.getElementById("ro_" + env.id);
+      const v = parseFloat(inp.value);
+      state.months[nextKey].budgeted[env.id] = isFinite(v) && v > 0 ? round2(v) : 0;
+    }
+  }
+  const inc = parseFloat($("newIncome").value);
+  state.months[nextKey].income = isFinite(inc) && inc > 0 ? round2(inc) : 0;
+  curMonth = nextKey;
+  saveState();
+  closeAndRerender(null);
+}
+
+/* ---------- export / import / erase ---------- */
+function exportCSV(){
+  const lines = ["Month,Date,Envelope,Note,Amount"];
+  const envName = {};
+  for(const e of state.envelopes) envName[e.id] = e.name;
+  for(const mk of Object.keys(state.months).sort()){
+    for(const t of state.months[mk].txs || []){
+      const csvCell = s => '"' + String(s).replace(/"/g, '""') + '"';
+      lines.push([
+        mk, t.date,
+        csvCell(envName[t.envId] || "Unknown"),
+        csvCell(t.note || ""),
+        t.amount.toFixed(2)
+      ].join(","));
+    }
+  }
+  downloadFile("envelope-budget-transactions.csv", lines.join("\r\n") + "\r\n", "text/csv");
+}
+function exportJSON(){
+  downloadFile("envelope-budget-backup.json", JSON.stringify(state, null, 2), "application/json");
+}
+function downloadFile(name, content, type){
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function importJSON(file){
+  file.text().then(txt => {
+    const st = JSON.parse(txt);
+    if(!st || !Array.isArray(st.envelopes) || typeof st.months !== "object") throw new Error("bad file");
+    state = st;
+    if(!state.months[curMonth]) curMonth = latestMonthKey(state) || currentMonthKey();
+    saveState(); render();
+  }).catch(() => alert("Could not restore that file."));
+}
+function eraseAll(){
+  if(!confirm("Erase ALL budget data from this browser? This cannot be undone.")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = defaultState();
+  saveState(); render();
+}
+
+function closeAndRerender(dlgId){
+  if(dlgId) $(dlgId).close();
+  render();
+}
+
+/* ---------- wiring ---------- */
+$("prevMonth").addEventListener("click", () => { curMonth = shiftMonth(curMonth, -1); render(); });
+$("nextMonth").addEventListener("click", () => { curMonth = shiftMonth(curMonth, 1); render(); });
+$("setupMonth").addEventListener("click", openRollover);
+$("envSave").addEventListener("click", saveEnv);
+$("spendSave").addEventListener("click", () => logSpend(null));
+$("spendAmt").addEventListener("keydown", e => { if(e.key === "Enter") logSpend(null); });
+$("editSave").addEventListener("click", saveEditTx);
+$("editDelete").addEventListener("click", deleteTx);
+$("rolloverSave").addEventListener("click", applyRollover);
+$("exportCsv").addEventListener("click", exportCSV);
+$("exportJson").addEventListener("click", exportJSON);
+$("importJson").addEventListener("click", () => $("fileInput").click());
+$("fileInput").addEventListener("change", e => { if(e.target.files[0]) importJSON(e.target.files[0]); });
+$("eraseAll").addEventListener("click", eraseAll);
+document.querySelectorAll("dialog [data-close]").forEach(b => {
+  b.addEventListener("click", () => b.closest("dialog").close());
+});
+window.addEventListener("keydown", e => {
+  if(e.key === "Escape") return;
+  if(document.querySelector("dialog[open]")) return;
+  if(e.target.closest("input,select,textarea")) return;
+  if(e.key === "ArrowLeft") $("prevMonth").click();
+  if(e.key === "ArrowRight") $("nextMonth").click();
+});
+
+render();
+</script>
+</body>
+</html>
