@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build a release for, e.g. v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      NAME: ${{ github.event.repository.name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Test
+        run: for t in tests/*.js; do node "$t"; done
+      - name: Package
+        run: |
+          mkdir -p release "$NAME-$TAG"
+          cp index.html README.md LICENSE "$NAME-$TAG/"
+          cp index.html "release/$NAME.html"
+          zip -rq "release/$NAME-$TAG.zip" "$NAME-$TAG"
+      - name: Publish GitHub release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* --title "$NAME $TAG" --generate-notes --verify-tag
+          fi
